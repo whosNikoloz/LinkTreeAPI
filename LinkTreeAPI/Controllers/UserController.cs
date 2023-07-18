@@ -6,7 +6,7 @@ using LinkTreeAPI.Data;
 using LinkTreeAPI.Model;
 using LinkTreeAPI.Model.LoginRequest;
 using Microsoft.EntityFrameworkCore;
-
+using System.Web;
 
 namespace LinkTreeAPI.Controllers
 {
@@ -79,9 +79,10 @@ namespace LinkTreeAPI.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            string returnUrl = "https://localhost:7070/";
 
+            string verificationLink = Url.Action("Verify", "User", new { token = user.VerificationToken, returnUrl = returnUrl }, Request.Scheme);
 
-            string verificationLink = Url.Action("Verify", "User", new { token = user.VerificationToken }, Request.Scheme);
 
             await SendVerificationEmail(user.Email, verificationLink);
 
@@ -164,7 +165,7 @@ namespace LinkTreeAPI.Controllers
         }
 
         [HttpGet("verify")]
-        public async Task<IActionResult> Verify(string token)
+        public async Task<IActionResult> Verify(string token, string returnUrl)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.VerificationToken == token);
 
@@ -176,7 +177,15 @@ namespace LinkTreeAPI.Controllers
             user.VerifiedAt = DateTime.Now;
             await _context.SaveChangesAsync();
 
-            return Ok("User verified successfully.");
+            // Use the Url.IsLocalUrl method to prevent open redirects
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                // Redirect to the returnUrl if it is a local URL
+                return Redirect(returnUrl);
+            }
+
+            // If the returnUrl is not a local URL or is empty, redirect to a default page
+            return Ok(user.VerifiedAt);
         }
 
 
