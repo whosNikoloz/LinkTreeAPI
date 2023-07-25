@@ -7,6 +7,7 @@ using LinkTreeAPI.Model;
 using LinkTreeAPI.Model.LoginRequest;
 using Microsoft.EntityFrameworkCore;
 using System.Web;
+using Azure.Core;
 
 namespace LinkTreeAPI.Controllers
 {
@@ -31,8 +32,8 @@ namespace LinkTreeAPI.Controllers
         }
 
 
-        [HttpGet("UserName")]
-        public async Task<IActionResult> GetUser(string username)
+        [HttpPost("UserName")]
+        public async Task<IActionResult> GetUser([FromBody] string username)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == username);
 
@@ -188,9 +189,11 @@ namespace LinkTreeAPI.Controllers
             return Ok(user.VerifiedAt);
         }
 
+        
+
 
         [HttpPost("Forgot-password")]
-        public async Task<IActionResult> FotgotPassword(string email)
+        public async Task<IActionResult> ForgotPassword([FromBody] string email)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
@@ -203,7 +206,15 @@ namespace LinkTreeAPI.Controllers
             user.PasswordResetToken = CreateRandomToken();
             user.ResetTokenExpires = DateTime.Now.AddDays(1);
 
-            await _context.SaveChangesAsync();
+			string returnUrl = "https://localhost:7070/Account/ResetPassword";
+
+			string verificationLink = $"{returnUrl}?token={user.PasswordResetToken}";
+
+
+
+			await SendEmail(email, verificationLink);
+
+			await _context.SaveChangesAsync();
 
             return Ok($"You may reset your password now.");
         }
@@ -232,9 +243,106 @@ namespace LinkTreeAPI.Controllers
             return Ok($"Password Succesfully resets.");
         }
 
-        private async Task SendVerificationEmail(string email, string confirmationLink)
+
+        //chnages //
+
+        [HttpPost("Change-password")]
+        public async Task<IActionResult> changepassword(User requestuser, string newpassword ,string oldpassword)
         {
-            string messageBody = $"Click the link below to verify your email:<br/><a href=\"{confirmationLink}\">Verify</a>";
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == requestuser.Email);
+
+            if (user == null)
+            {
+                return BadRequest("user not found.");
+            }
+            if (!VerifyPasswordHash(oldpassword, requestuser.PasswordHash, requestuser.PasswordSalt))
+            {
+                return BadRequest("Wrong password.");
+            }
+
+            CreatePasswordHash(newpassword, out byte[] passwordHash, out byte[] passwordSalt);
+
+
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+            user.PasswordResetToken = null;
+            user.ResetTokenExpires = null;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception occurred during SaveChangesAsync: " + ex.Message);
+            }
+            
+
+            return Ok(requestuser);
+        }
+
+        [HttpPost("Change-usernameornumber")]
+        public async Task<IActionResult> changeusername(User requestuser)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == requestuser.Email);
+
+            if (user == null)
+            {
+                return BadRequest("user not found.");
+            }
+
+            user.UserName = requestuser.UserName;
+            user.PhoneNumber = requestuser.PhoneNumber;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return Ok("Successfully changed Username or number");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Exception occurred during SaveChangesAsync: " + ex.Message);
+                return StatusCode(500, "An error occurred while saving changes.");
+            }
+        }
+
+		[HttpPost("userimage")]
+		public async Task<IActionResult> userimage(User imagerequest)
+		{
+			var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == imagerequest.Email);
+
+			if (user == null)
+			{
+				return BadRequest("user not found.");
+			}
+
+			user.Picture = imagerequest.Picture;
+
+			try
+			{
+				await _context.SaveChangesAsync();
+				return Ok("Successfully changed Username or number");
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("Exception occurred during SaveChangesAsync: " + ex.Message);
+				return StatusCode(500, "An error occurred while saving changes.");
+			}
+		}
+
+
+
+
+		private async Task SendVerificationEmail(string email, string confirmationLink)
+        {
+            string messageBody = $@"
+            <h1>Account Verification</h1>
+            <p>Thank you for signing up with our service. To activate your account, please click the button below:</p>
+            <a href=""{confirmationLink}"" style=""background-color: #007BFF; color: white; padding: 14px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 4px; font-size: 16px; margin: 10px auto; display: block;"">Verify Account</a>
+            <p>If you are having trouble with the button, you can also click the link below:</p>
+            <a href=""{confirmationLink}"">Verify</a>
+            <img src=""https://static.vecteezy.com/system/resources/previews/008/132/083/original/green-tree-cartoon-isolated-on-white-background-illustration-of-green-tree-cartoon-free-vector.jpg"" alt=""Your Logo"" style=""display: block;width:400px;height:331px; margin: 20px auto;"">
+        ";
 
             using (MailMessage message = new MailMessage("noreplynika@gmail.com", email))
             {
@@ -259,10 +367,44 @@ namespace LinkTreeAPI.Controllers
                 }
             }
         }
+		private async Task SendEmail(string email, string confirmationLink)
+		{
+            string messageBody = $@"
+            <h1>Reset Password</h1>
+            <p>Please click the button below to reset your password:</p>
+            <a href=""{confirmationLink}"" style=""background-color: #4CAF50; color: white; padding: 14px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 4px; font-size: 16px; margin: 10px auto; display: block;"">Reset Password</a>
+            <p>If you are having trouble with the button, you can also click the link below:</p>
+            <a href=""{confirmationLink}"">Reset Password</a>
+            <img src=""https://static.vecteezy.com/system/resources/previews/008/132/083/original/green-tree-cartoon-isolated-on-white-background-illustration-of-green-tree-cartoon-free-vector.jpg"" alt=""Your Logo"" style=""display: block;width:400px;height:311px; margin: 20px auto;"">
+             ";
+
+            using (MailMessage message = new MailMessage("noreplynika@gmail.com", email))
+			{
+				message.Subject = "Email Verification";
+				message.Body = messageBody;
+				message.IsBodyHtml = true;
+
+				using (SmtpClient smtpClient = new SmtpClient("smtp.gmail.com", 587))
+				{
+					smtpClient.Credentials = new NetworkCredential("noreplynika@gmail.com", "cdqwvhmdwljietwq");
+					smtpClient.EnableSsl = true;
+
+					try
+					{
+						await smtpClient.SendMailAsync(message);
+					}
+					catch (Exception)
+					{
+						// Handle any exception that occurs during the email sending process
+						// You can log the error or perform other error handling actions
+					}
+				}
+			}
+		}
 
 
 
-        private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
+		private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
             using (var hmac = new HMACSHA512())
             {

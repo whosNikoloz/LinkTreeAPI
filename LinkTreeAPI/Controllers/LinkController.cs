@@ -1,5 +1,6 @@
 ﻿using LinkTreeAPI.Data;
 using LinkTreeAPI.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace LinkTreeAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class LinkController : Controller
+    public class LinkController : ControllerBase
     {
         private readonly DataDbContext _context;
         private readonly IConfiguration _configuration;
@@ -50,6 +51,21 @@ namespace LinkTreeAPI.Controllers
             var links = userWithLinks.Links;
 
             return Ok(links);
+        }
+
+
+        [HttpPost("UserWithLinks")]
+        public async Task<IActionResult> UserWithLinks([FromBody]string email)
+        {
+            var userWithLinks = await _context.Users.Include(u => u.Links).FirstOrDefaultAsync(u => u.Email == email);
+
+            if (userWithLinks == null)
+            {
+                return BadRequest();
+            }
+
+
+            return Ok(userWithLinks);
         }
 
         [HttpPut("GetLink")]
@@ -119,7 +135,7 @@ namespace LinkTreeAPI.Controllers
                 {
                     _context.Links.Remove(link);
                     await _context.SaveChangesAsync();
-                    return Ok("Removed");
+                    return Ok(userWithLinks);
                 }
             }
 
@@ -143,7 +159,7 @@ namespace LinkTreeAPI.Controllers
                 _context.Links.Remove(links[0]);
                 await _context.SaveChangesAsync();
             }
-            
+
 
             return Ok("Cleared");
         }

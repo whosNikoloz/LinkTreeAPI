@@ -6,7 +6,7 @@
         public string? UserName { get; set; }
 
         public string? Email { get; set; } = string.Empty;
-        public byte[]? Picture { get; set; } = null;
+        public string? Picture { get; set; } = string.Empty;
 
         public string? PhoneNumber { get; set; }
 
