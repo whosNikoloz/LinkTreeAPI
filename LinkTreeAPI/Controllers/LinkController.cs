@@ -91,9 +91,9 @@ namespace LinkTreeAPI.Controllers
         }
 
         [HttpPut("EditLink")]
-        public async Task<IActionResult> UserLinkEdit(string user, int id, Linkrequest update)
+        public async Task<IActionResult> UserLinkEdit(string username, int linkid, Linkrequest update)
         {
-            var userWithLinks = await _context.Users.Include(u => u.Links).FirstOrDefaultAsync(u => u.UserName == user);
+            var userWithLinks = await _context.Users.Include(u => u.Links).FirstOrDefaultAsync(u => u.UserName == username);
 
             if (userWithLinks == null)
             {
@@ -103,13 +103,13 @@ namespace LinkTreeAPI.Controllers
             var links = userWithLinks.Links;
             foreach (var link in links)
             {
-                if (link.Id == id)
+                if (link.Id == linkid)
                 {
                     link.Description = update.Description;
                     link.link = update.link;
                     link.Name = update.Name;
                     await _context.SaveChangesAsync();
-                    return Ok("Changed");
+                    return Ok(userWithLinks);
                 }
             }
 
